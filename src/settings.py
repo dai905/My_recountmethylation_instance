@@ -23,7 +23,7 @@ import os
 def init():
     # [platform]
     global platformid
-    platformid = 'GPL13534'
+    platformid = 'GPL21145'
 
     # [filedirectories]
     global filesdir

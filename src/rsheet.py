@@ -1,5 +1,24 @@
 #!/usr/bin/env python3
 
+""" Mod notes: 20230424
+    Authors: Liuhan
+    Notes: Make hardlinks in the EPIC_idat data folder, a symbolic link to folder on lab server
+    
+    Details:
+        1) change to absolute directory
+        2) Save *.hlink* data in EPIC_idat data folder which is a link to data folder on lab server
+        3) delete redundant scripts and variables
+    
+    Procedures:
+        1) First of all, make sure our cwd is always recountmethylation_instance
+        2) Specify their directory using absolute dir
+        3) Store them in EPIC_datafolder
+    Functions:
+        1) rmdb_fpaths_EPIC: Make hardlinks to idat files.
+        2) new_idat_hlinks_EPIC:  Make hardlinks to idat files
+
+"""
+
 """ rsheet.py
 
     Author: Sean Maden
@@ -18,6 +37,42 @@ sys.path.insert(0, os.path.join("recountmethylation_server","src"))
 import settings; settings.init()
 from utilities import gettime_ntp, getlatest_filepath, get_queryfilt_dict
 
+def new_idat_hlinks_EPIC(gsmid, ts, igrn_fn, ired_fn):
+    """ new_idat_hlinks_EPIC
+
+        Make new hlink files and return new hlink paths.
+
+        Arguments
+        * gsmid: Valid sample GSM ID (str).
+        * ts: Timestamp (int or str).
+        * igrn_fn: Filename of green intensity data file (IDAT, str).
+        * ired_fn: Filename of red intensity data file (IDAT, str).
+        
+        Returns
+        * rlist (list): List of path to new grn [0] and red [1] hlinked idats
+    """    
+    print("generating new hlink filenames...")
+    gnewhlinkfn = '.'.join([gsmid, ts, 'hlink', 
+        '.'.join(igrn_fn.split('.')[2:])
+        ]
+    )
+    rnewhlinkfn = '.'.join([gsmid, ts, 'hlink', 
+        '.'.join(ired_fn.split('.')[2:])
+        ]
+    )
+    # create new hardlink
+    print("make new hlinks with filenames...")
+    rlist = []
+    # Alternatively we can use win32file module to create hardlink
+    grn_hlink = os.link(os.path.join('EPIC_idat',igrn_fn),
+            os.path.join('EPIC_idat', gnewhlinkfn)
+        )
+    red_hlink = os.link(os.path.join('EPIC_idat',ired_fn),
+            os.path.join('EPIC_idat', rnewhlinkfn)
+        )
+    rlist.append(os.path.join('EPIC_idat', gnewhlinkfn))
+    rlist.append(os.path.join('EPIC_idat', rnewhlinkfn))
+    return rlist
 
 def new_idat_hlinks(gsmid, ts, igrn_fn, ired_fn):
     """ new_idat_hlinks
@@ -54,6 +109,65 @@ def new_idat_hlinks(gsmid, ts, igrn_fn, ired_fn):
     rlist.append(os.path.join(settings.idatspath, gnewhlinkfn))
     rlist.append(os.path.join(settings.idatspath, rnewhlinkfn))
     return rlist
+
+def rmdb_fpaths_EPIC():
+    """ rmdb_fpaths_EPIC
+
+        Get filepaths for existant sample idats and msrap outfiles.
+
+        Returns:
+        * hlinklist, list of new hlink files created at settings.idatspath.
+
+    """
+    # Fix cwd as follows:
+    if os.getcwd() != '/home/liuha/recountmethylation_instance':
+        os.chdir('/home/liuha/recountmethylation_instance')
+        
+    timestamp = gettime_ntp()
+
+    # list all previously expanded idat files directy from idats dir
+    instpath_allidats = os.listdir(os.path.join('EPIC_idat'))
+    
+   
+    # expanded idats
+    instpath_expidat = list(filter(re.compile('.*\.idat$').match, 
+        instpath_allidats))
+    # idat hlinks
+    instpath_hlink = list(filter(re.compile('.*hlink.*').match, 
+        instpath_expidat))
+    # expanded idats without hlinks
+    instpath_nohlink = [i for i in instpath_expidat 
+        if not i in instpath_hlink]
+    print("Detected " + str(len(instpath_expidat)) + 
+        " expanded IDATs, and " + str(len(instpath_nohlink)) + 
+        " expanded IDATs without hlinks.")
+    print("Getting GSM IDs for IDATs without hlinks...")
+    gsmlist = list(set([i.split(".")[0] for i in instpath_nohlink]))
+    
+    instpath_idatspathlist = [i for i in instpath_nohlink 
+        if i.split(".")[0] in gsmlist]; hlinklist=[]
+    for gsmid in gsmlist:
+        print("Processing GSM ID " + gsmid + "..."); 
+        ired_fn = ""; igrn_fn = ""; basename_grn = ""; basename_red = ""
+        gsm_idats = [i for i in instpath_idatspathlist
+            if i.split(".")[0] == gsmid and 
+            os.path.exists(os.path.join('EPIC_idat', i))]
+        try:
+            igrn_fn = list(filter(re.compile(".*Grn\.idat$").match, gsm_idats))[0]
+            ired_fn = list(filter(re.compile(".*Red\.idat$").match, gsm_idats))[0]
+            basename_grn = "_".join(igrn_fn.split(".")[2].split("_")[0:-1])
+            basename_red = "_".join(ired_fn.split(".")[2].split("_")[0:-1])
+            if (basename_grn==basename_red and not basename_grn == "" 
+                and not basename_red == ""):
+                print("Making new IDAT hlinks for GSM ID " + gsmid)
+                rlist = new_idat_hlinks_EPIC(gsmid = gsmid, ts = timestamp, 
+                    igrn_fn = igrn_fn, ired_fn = ired_fn)
+                hlinklist.append(rlist)
+        except:
+            print("Couldn't find Red and Grn IDATs for GSM ID " + gsmid)
+        print("Finished with GSM ID " + gsmid)
+    print("Made " + str(len(hlinklist)) + " new IDAT hlinks. Returning...")
+    return hlinklist
 
 def rmdb_fpaths():
     """ rmdb_fpaths
@@ -417,12 +531,13 @@ if __name__ == "__main__":
         First generates any missing hlink files. 
 
         Second, passes to compile_rsheet a dictionary of GSM IDs corresponding 
-        to newlt created hlink files for validation.
+        to newly created hlink files for validation.
 
     """
     try:
-        hlinklist = rmdb_fpaths()
-        gsmlist = [os.path.basename(i[0]).split(".")[0] for i in hlinklist] 
+        hlinklist = rmdb_fpaths_EPIC()
+        #hlinklist = rmdb_fpaths()
+        #gsmlist = [os.path.basename(i[0]).split(".")[0] for i in hlinklist] 
         #if gsmfpd:
         #    print("Successfully ran rmdb_files_for_processing(). Continuing...")
         #    rsheet = compile_rsheet(gsmdict)

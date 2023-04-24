@@ -1,4 +1,21 @@
 #!/usr/bin/env python3
+""" Mod notes: 20230421
+    Authors: Liuhan
+    Notes: expand *.idat.gz files to *.idat files and save them into lab server
+    instead of locally due to limited storage space.
+    
+    Details:
+        1) change to absolute directory
+        2) Save expanded *.idat data in EPIC_datafolder which is a link to data folder on lab server
+    
+    Procedures:
+        1) First of all, we need to figure all idat files that are downloaded by R script
+        2) Specify their directory using absolute dir in process_idats.py
+        3) Expand them and store them in EPIC_datafolder
+    Functions:
+        1) expand_idats_EPIC: Expand compressed idat files.
+"""
+
 
 """ process_idats.py
 
@@ -14,6 +31,58 @@
 import os, sys, re, gzip, shutil; from random import shuffle
 sys.path.insert(0, os.path.join("recountmethylation_server","src"))
 import settings; settings.init()
+
+def expand_idats_EPIC(idatspath = settings.idatspath, compext = ".*idat.gz$", 
+    expext = ".*idat$"):
+    """ expand_idats
+
+        Detect and expand available idat files.
+        
+        Arguments:
+        * idatspath : Path to instance directory containing downloaded 
+            IDATs (valid file path).
+        * compext : Regular expression pattern for extension of compressed
+            IDAT files (string, regex pattern).
+        * expext : Regular expression pattern for extension of expanded 
+            IDAT files (string, regex pattern).
+
+        Returns:
+        * ridatd dictionary containing expanded IDAT info.
+    """
+    # Fix cwd as follows:
+    if os.getcwd() != '/home/liuha/recountmethylation_instance':
+        os.chdir('/home/liuha/recountmethylation_instance')
+    
+    # For idat files download by dl_idat.R script
+    idatspath = os.path.join('recount-methylation-files','temp','idats_temp')
+    idats_outpath = os.path.join('EPIC_idat')
+    
+    idats_fnlist0 = os.listdir(idatspath)
+    idats_fnlist = os.listdir(idats_outpath)
+    
+    rexpanded1 = re.compile(expext); rcompressed1 = re.compile(compext)
+    # Collect idat files that are already being expanded
+    idats_fnlist_filt1 = list(filter(rexpanded1.match, idats_fnlist))
+    # Collect all compressed idat.gz fliles
+    idats_fnlist_filt2 = list(filter(rcompressed1.match, idats_fnlist0))
+    # Only select compressed files that have not been expanded
+    idats_fnlist_filt = [fn for fn in idats_fnlist_filt2 
+                            if not '.'.join(fn.split(".")[0:-1]) in idats_fnlist_filt1]
+    if len(idats_fnlist_filt) + len(idats_fnlist_filt1) != len(idats_fnlist_filt2):
+        print('Warning: Missing files'); return
+    shuffle(idats_fnlist_filt); ridatd = {}; nfile = 1
+    print("Expanding "+str(len(idats_fnlist_filt))+" compressed IDATs...")
+    for compidat in idats_fnlist_filt:
+        print("Working on file "+compidat+", number "+str(nfile))
+        idat_fn = os.path.splitext(compidat)[0];statuslist=[]; ridatd[compidat] = []
+        with gzip.open(os.path.join(idatspath, compidat), 'rb') as f_in:
+            with open(os.path.join(idats_outpath, idat_fn), 'wb') as f_out:
+                try:
+                    shutil.copyfileobj(f_in, f_out); ridatd[compidat].append(1)
+                except:
+                    ridatd[compidat].append(shutil.Error)
+        print("Finished with file "+compidat+", number "+str(nfile));nfile+=1
+    return sys.getsizeof(ridatd) # Do not print ridatd since it is too large to display
 
 def expand_idats(idatspath = settings.idatspath, compext = ".*idat.gz$", 
     expext = ".*idat$"):
@@ -49,7 +118,7 @@ def expand_idats(idatspath = settings.idatspath, compext = ".*idat.gz$",
                 try:
                     shutil.copyfileobj(f_in, f_out); ridatd[compidat].append(1)
                 except:
-                    ridatd[compidat].append(shutil.Error)
+                        ridatd[compidat].append(shutil.Error)
         print("Finished with file "+compidat+", number "+str(nfile));nfile+=1
     return ridatd
 
@@ -106,6 +175,7 @@ if __name__ == "__main__":
     for compilation.
 
     """
-    expand_idats()
-    new_idat_hlinks()
-    expand_idats()
+ #   expand_idats()
+    expand_idats_EPIC()
+ #   new_idat_hlinks()
+ #  expand_idats()
