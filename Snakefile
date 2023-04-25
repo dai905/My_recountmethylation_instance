@@ -182,7 +182,7 @@ rule run_dnam_pipeline:
 
 # Compile the red/green signal data table files
 rule get_rg_compilations:
-    input: os.path.join(rmp_path, "get_rg_compilations.R")
+    input: os.path.join(rmp_path, "get_rg_compilations_EPIC.R")
     log: os.path.join(logspath, "get_rg_compilations_"+ts+".log")
     shell: "Rscript {input} >& {log}"
 
