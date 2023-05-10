@@ -1,5 +1,10 @@
 #!/usr/bin/env snakemake
 
+# Mod on 20230508
+# Author: Liuhan
+# Descrition: Modify rule get_h5db_rg to run get_h5db_rg_EPIC.R in order to run files 
+# on own folders on lab server
+#
 # Author: Sean Maden
 #
 # Description:
@@ -186,10 +191,10 @@ rule get_rg_compilations:
     log: os.path.join(logspath, "get_rg_compilations_"+ts+".log")
     shell: "Rscript {input} >& {log}"
 
-# Make the h5 rg database
+# Make the h5 rg database, modified by Liuhan on 20230508
 rule get_h5db_rg:
-    input: os.path.join(rmp_path, "get_h5db_rg.R")
-    log: os.path.join(logspath, "get_h5db_rg_"+ts+".log")
+    input: os.path.join(rmp_path, "get_h5db_rg_EPIC.R")
+    log: os.path.join(logspath, "get_h5db_rg_EPIC_"+ts+".log")
     shell: "Rscript {input} >& {log}"
 
 # Make the h5se rg database
